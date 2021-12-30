@@ -22,7 +22,7 @@ git clone https://github.com/AnimusXCASH/BinanceGridTrader.git
 ```
 ### Install Project Requirements
 ```
-pip3 install requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ### Install MongoDB
