@@ -40,6 +40,7 @@ Create file into main directory under the name `botSetup.json` and fill in follo
   "base": "bid", // Which based to use for grid calculation: bid, ask
   "dollarPerCoin": 240, // UDST devoted per pair
   "gain": 0.020 // Exit percentage for limit sell from marked buy price
+  "monitor": 120 //Seconds between grid re-checks currently set to 120
 }
 
 ```

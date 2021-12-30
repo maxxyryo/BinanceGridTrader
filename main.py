@@ -290,7 +290,7 @@ def main():
         for s in SYMBOLS:
             check_grid_state(s)
         print(f'All GRIDS checked going to sleep for 120 seconds')
-        time.sleep(120)
+        time.sleep(settings["monitor"])
 
 
 if __name__ == '__main__':
