@@ -1,7 +1,20 @@
 # Binance Multi Coin Grid Trader
 
+## About
 
-## Install 
+- [x] Create limit buy order grid for specific market under set conditions (Grid level distance, grid count,etc.) equally distributed.
+  - [x] Grids are created on bot startup if no previous grids in database founds
+- [x] Monitors grid orders and once purchase is done, it automatically sets the sell limits based on setup parameters
+- [x] Monitors limit sell orders 
+- [x] Activities stored in Mongo Database collections for tracking
+  - [x] Limit buy order grids
+  - [x] limit sell orders
+  - [x] completed grids
+  - [ ] performance calculation
+- [ ] Once Grids are completed make new grids once grid is completed
+- [ ] Overall account performance tracking
+
+## Install  
 
 ### Clone the repository
 ```buildoutcfg
@@ -11,6 +24,8 @@ git clone https://github.com/AnimusXCASH/BinanceGridTrader.git
 ```
 pip3 install requirements.txt
 ```
+
+### Install MongoDB
 
 ### Bot Setup File
 Create file into main directory under the name `botSetup.json` and fill in following requirements.
