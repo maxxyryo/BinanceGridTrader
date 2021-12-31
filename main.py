@@ -5,63 +5,30 @@ import time
 from pprint import pprint
 from backend.backendManager import BackOffice
 from helpers.fileManagement import FileManager
-
+from helpers.numberManager import NumberManager
+from helpers.klinesManager import TaManager
+from helpers.gridConstructor import GridConstructor
+from helpers.binaceTrader import BinanceTrader
 
 init(autoreset=True)
 file_manager = FileManager()
+grid_constructor = GridConstructor()
 backoffice = BackOffice()
-
+number_manager = NumberManager()
 settings = file_manager.read_json_file(file_name=f'botSetup.json')
+binance_trader = BinanceTrader(public_key=settings["binancePublic"], private_key=settings["binancePrivate"])
+client = Client(api_key=settings["binancePublic"], api_secret=settings["binancePrivate"])
+klines_manager = TaManager(client)
 
 # Loading grid data
 SYMBOLS = settings["markets"]
 INTERVAL = settings["gridDistance"]
-GRID_LEVELS =settings["grids"]
+GRID_LEVELS = settings["grids"]
 GRID_BASE = settings["base"].upper()
 
 # Money Management
 DOLLAR_PER_TOKEN = settings["dollarPerCoin"]
 GAIN = settings["gain"]
-
-
-client = Client(api_key=settings["binancePublic"], api_secret=settings["binancePrivate"])
-
-
-def count_decimals(filter: str):
-    """
-    Returns the data on how many decimal places
-    :param filter: String of float representing decimal places
-    :return: integer to be used to determine minimal lot and decimal places
-    """
-    price = str(float(filter))
-    return price[::-1].find('.')
-
-
-def get_buy_grid(grid_count, asset_price, step, price_filter_decimal: int):
-    """
-    Calculates the grid
-    :param grid_count:
-    :param asset_price:
-    :param step:
-    :return:
-    """
-    levels = []
-    lvl = 1
-    step_value = 0
-    print(Fore.LIGHTGREEN_EX + f"GRID data...")
-    for x in range(grid_count):
-        step_value += asset_price * step
-        grid_level = asset_price - step_value
-        to_atomic = grid_level * (10 ** 7)
-        grid_level = round(to_atomic / (10 ** 7), price_filter_decimal)
-        print(f"L{lvl} @ {grid_level} USDT with drop {round(step_value, price_filter_decimal)} USDT")
-        lvl += 1
-        levels.append(grid_level)
-    return levels
-
-
-def get_sell_grid_single(buy_price, decimal_places):
-    return (int(buy_price * (1.00 + GAIN) * (10 ** decimal_places))) / (10 ** decimal_places)
 
 
 def deploy_grid(symbol):
@@ -70,7 +37,6 @@ def deploy_grid(symbol):
     :return:
     """
     print(Fore.CYAN + f'Initializing GRID for {symbol} based on {GRID_BASE} as a base (L0)...')
-
     # Getting base and calcuating GRID
     data = client.get_orderbook_ticker(symbol=symbol)
 
@@ -81,8 +47,8 @@ def deploy_grid(symbol):
     lot_size = [x for x in symbol_data["filters"] if x["filterType"] == 'LOT_SIZE'][0]
 
     # get exchange price characteristics
-    minimum_price_decimal = count_decimals(price_filter["minPrice"])
-    minimum_lot_size_decimal = count_decimals(lot_size["minQty"])
+    minimum_price_decimal = number_manager.count_decimals(price_filter["minPrice"])
+    minimum_lot_size_decimal = number_manager.count_decimals(lot_size["minQty"])
 
     if GRID_BASE == "BID":
         base_price = data["bidPrice"]
@@ -94,8 +60,8 @@ def deploy_grid(symbol):
         print(Fore.GREEN + f'Last ASK is {base_price} USDT')
 
     print(Fore.BLUE + f'Creating {GRID_LEVELS} GRID levels with drop of {INTERVAL * (1 ** 2)}% per GRID...')
-    buy_grid = get_buy_grid(grid_count=GRID_LEVELS, asset_price=float(base_price), step=INTERVAL,
-                            price_filter_decimal=minimum_price_decimal)
+    buy_grid = grid_constructor.get_buy_grid(grid_count=GRID_LEVELS, asset_price=float(base_price), step=INTERVAL,
+                                             price_filter_decimal=minimum_price_decimal)
 
     level = 1
     dollar_size = int(DOLLAR_PER_TOKEN / GRID_LEVELS)  # Equal distribution of dollars across range
@@ -114,25 +80,30 @@ def deploy_grid(symbol):
             qty = qty / (10 ** minimum_lot_size_decimal)
             qty_str = "{:0.0{}f}".format(qty, 3)
             print(f"{symbol}: {dollar_size} (QTY: {qty_str}) @ {value}")
-            order = client.order_limit_buy(
-                symbol=symbol,
-                quantity=qty_str,
-                price=value)
-            order_id = order["orderId"]
-            price = order["price"]
-            qty = order["origQty"]
-            print(f'{order_id} @ {price} with QTY {qty}')
-            if backoffice.grid_manager.store_limit_order({
-                "gridL": f"L{level}",
-                "orderId": order_id,
-                "price": price,
-                "symbol": order["symbol"],
-                "origQty": qty}):
-                print(Fore.YELLOW + f"Order stored successfully")
-                print(Fore.GREEN + f'Limit order deployed at L{level}')
-                level += 1
+
+            # Try to make an order
+            result = binance_trader.make_limit_buy(symbol=symbol, qty_str=qty_str, value=value)
+            # Process result
+            if isinstance(result, dict):
+                order_id = result["orderId"]
+                price = result["price"]
+                qty = result["origQty"]
+                print(f'{order_id} @ {price} with QTY {qty}')
+
+                # TODO integrate total money spent
+                if backoffice.grid_manager.store_limit_order({
+                    "gridL": f"L{level}",
+                    "orderId": order_id,
+                    "price": price,
+                    "symbol": result["symbol"],
+                    "origQty": qty}):
+                    print(Fore.YELLOW + f"Order stored successfully")
+                    print(Fore.GREEN + f'Limit order deployed at L{level}')
+                    level += 1
+                else:
+                    print(Fore.RED + f'Could not store order in database')
             else:
-                print(Fore.RED + f'Could not process order')
+                print(Fore.RED + f'L{level} grid could not be deployed due to API error: {result}')
         print(Fore.GREEN + f'GRID for symbol {symbol} successfully deployed')
     else:
         print(Fore.RED + f"GRID could not be created as monomum quantity demands are not met or symbol. "
@@ -155,12 +126,12 @@ def check_grid_state(symbol):
     symbol_data = backoffice.grid_manager.get_symbol_info(symbol=symbol)
     price_filter = [x for x in symbol_data["filters"] if x["filterType"] == 'PRICE_FILTER'][0]
     lot_size = [x for x in symbol_data["filters"] if x["filterType"] == 'LOT_SIZE'][0]
-    minimum_price_decimal = count_decimals(price_filter["minPrice"])
-    minimum_lot_size_decimal = count_decimals(lot_size["minQty"])
+    minimum_price_decimal = number_manager.count_decimals(price_filter["minPrice"])
+    minimum_lot_size_decimal = number_manager.count_decimals(lot_size["minQty"])
 
     if limit_buy_orders:
         for x in limit_buy_orders:
-            current_order = client.get_order(symbol=x["symbol"], orderId=x["orderId"])
+            current_order = binance_trader.get_order(symbol=x["symbol"], order_id=x["orderId"])
             if current_order['status'] == 'FILLED':
                 print(Fore.GREEN + f'Order ID {x["orderId"]} has been FILLED')
                 print(Fore.YELLOW + f'Creating LIMIT SELL')
@@ -176,54 +147,53 @@ def check_grid_state(symbol):
                 final_amount = purchase_qty - float(commission)  # removing commission from the purchase qty
                 atomic = int(final_amount * (10 ** minimum_lot_size_decimal))
                 final_normal = atomic / (10 ** minimum_lot_size_decimal)
-                price = get_sell_grid_single(buy_price=float(purchase_price),
-                                             decimal_places=minimum_price_decimal)  # Get the targeted price for sell
+                price = grid_constructor.get_sell_grid_single(buy_price=float(purchase_price), gain=GAIN,
+                                                              decimal_places=minimum_price_decimal)  # Get the targeted price for sell
 
                 # Place limit sell order
                 print(
                     Fore.YELLOW + f'Creating sell limit order of buy order {current_order["orderId"]} at {x["gridL"]}....')
-                try:
-                    sell_order = client.order_limit_sell(
-                        symbol=symbol,
-                        quantity=f"{final_normal}",
-                        price=price)
-                    # pprint(sell_order)
 
+                #TODO rewrite this for OCO
+                sell_result = binance_trader.make_limit_sell(symbol=symbol,
+                                                             quantity=f"{final_normal}",
+                                                             price=price)
+                if isinstance(sell_result, dict):
                     # Remove from limit buys db
                     if backoffice.grid_manager.remove_buy_limit_order(order_id=current_order["orderId"]):
                         # Add to limit sells new order
                         if backoffice.grid_manager.store_sell_limit_order(data={
-                            "orderId": sell_order["orderId"],
-                            "price": sell_order["price"],
-                            "symbol": sell_order["symbol"],
-                            "origQty": sell_order["origQty"],
+                            "orderId": sell_result["orderId"],
+                            "price": sell_result["price"],
+                            "symbol": sell_result["symbol"],
+                            "origQty": sell_result["origQty"],
                             "gridL": x["gridL"]
                         }):
                             print(
-                                f'New limit sell created @ {x["gridL"]} price {sell_order["price"]} '
-                                f'qty {sell_order["origQty"]}{sell_order["symbol"]}')
+                                f'New limit sell created @ {x["gridL"]} price {sell_result["price"]} '
+                                f'qty {sell_result["origQty"]}{sell_result["symbol"]}')
                         else:
                             print(
-                                Fore.RED + F'Could not insert SELL LIMIT TO DB: sell order ID: {sell_order["orderId"]}')
+                                Fore.RED + F'Could not insert SELL LIMIT TO DB: sell order ID: {sell_result["orderId"]}')
                     else:
                         print(Fore.RED + F'Could not remove BUY LIMIT FROM DB: orderID: {current_order["orderId"]}')
 
-                    # Transfer to limit sells
+                elif isinstance(sell_result, str):
+                    print(Fore.RED + f'{x["gridL"]} grid could not be deployed due to API error: {sell_result}')
 
-                except Exception as e:
-                    print(Fore.RED + f"{e}")
             else:
                 print(Fore.LIGHTGREEN_EX + f'{x["gridL"]}: Order with ID {x["orderId"]} still open')
                 open += 1
     else:
         print(Fore.RED + f'{symbol} has no limit buys marked in DB')
+
     # Check limit sell order statuses
     open_sell = 1
     limit_sell_orders = backoffice.grid_manager.get_sell_limit_orders(ticker=symbol)
     if limit_sell_orders:
         print(Fore.WHITE + f'Total registered sell limit orders in DB {len(limit_sell_orders)}')
         for y in limit_sell_orders:
-            current_sell_limit_order = client.get_order(symbol=y["symbol"], orderId=y["orderId"])
+            current_sell_limit_order = binance_trader.get_order(symbol=y["symbol"], order_id=y["orderId"])
             if current_sell_limit_order['status'] == 'FILLED':
                 print(Fore.GREEN + f"GRID: {y['gridL']} TRADE COMPLETED")
 
@@ -243,6 +213,10 @@ def check_grid_state(symbol):
                 open_sell += 1
     else:
         print(Fore.RED + f'{symbol} has no limit sells marked in DB')
+
+    if len(limit_buy_orders) + len(limit_sell_orders) == 0:
+        print("Deploy new Grid ")
+
     print(Fore.CYAN + f"Done checking symbol {symbol}\n" \
                       "==============================================")
     return
