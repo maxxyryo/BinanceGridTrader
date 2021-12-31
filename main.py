@@ -1,8 +1,6 @@
 from binance import Client
 from datetime import datetime
 from colorama import Fore, init
-import sys
-import os
 import time
 from pprint import pprint
 from backend.backendManager import BackOffice
@@ -215,7 +213,7 @@ def check_grid_state(symbol):
                 except Exception as e:
                     print(Fore.RED + f"{e}")
             else:
-                print(Fore.GREEN + f'{x["gridL"]}: Order with ID {x["orderId"]} still open')
+                print(Fore.LIGHTGREEN_EX + f'{x["gridL"]}: Order with ID {x["orderId"]} still open')
                 open += 1
     else:
         print(Fore.RED + f'{symbol} has no limit buys marked in DB')
@@ -228,6 +226,7 @@ def check_grid_state(symbol):
             current_sell_limit_order = client.get_order(symbol=y["symbol"], orderId=y["orderId"])
             if current_sell_limit_order['status'] == 'FILLED':
                 print(Fore.GREEN + f"GRID: {y['gridL']} TRADE COMPLETED")
+
                 # TODO Integrate other data from the past to be stored for history
                 # Store the sell order in DB
                 if backoffice.grid_manager.store_to_done(current_sell_limit_order):
@@ -240,7 +239,7 @@ def check_grid_state(symbol):
                 else:
                     print(Fore.RED + "Could not store to done collection")
             else:
-                print(Fore.LIGHTGREEN_EX + f'GL{open_sell}: Order with ID {y["orderId"]} still open')
+                print(Fore.LIGHTRED_EX + f'GL{open_sell}: Order with ID {y["orderId"]} still open')
                 open_sell += 1
     else:
         print(Fore.RED + f'{symbol} has no limit sells marked in DB')
