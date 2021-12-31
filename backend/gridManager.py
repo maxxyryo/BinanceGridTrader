@@ -47,6 +47,9 @@ class GridManager:
         result = self.limit_buy.delete_one({"orderId":order_id})
         return result.deleted_count == 1
 
+    def remove_sell_limit_order(self,order_id):
+        result = self.limit_sell.delete_one({"orderId":order_id})
+        return result.deleted_count == 1
 
     def store_to_done(self, data):
         result = self.done.insert_one(data)

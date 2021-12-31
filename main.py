@@ -232,11 +232,16 @@ def check_grid_state(symbol):
                 # Store the sell order in DB
                 if backoffice.grid_manager.store_to_done(current_sell_limit_order):
                     print(Fore.GREEN + "Details stored successfully to database ")
+                    if backoffice.grid_manager.remove_sell_limit_order(y["orderId"]):
+                        print(Fore.GREEN + 'Sell limit order removed after moving to successfull')
+                    else:
+                        print(Fore.RED + "Could not remove from limit sell collection")
+
                 else:
-                    print(Fore.RED + "Could ont store to database")
+                    print(Fore.RED + "Could not store to done collection")
             else:
                 print(Fore.LIGHTGREEN_EX + f'GL{open_sell}: Order with ID {y["orderId"]} still open')
-                open += 1
+                open_sell += 1
     else:
         print(Fore.RED + f'{symbol} has no limit sells marked in DB')
     print(Fore.CYAN + f"Done checking symbol {symbol}\n" \
