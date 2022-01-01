@@ -4,11 +4,24 @@ from binance import Client
 
 
 class TaManager:
-    def __init__(self, client):
+    def __init__(self, client, klines_length):
         self.client = client
+        self.klines_length = self.get_interval(klines_length)
+
+    def get_interval(self, klines_length):
+        if klines_length == "1":
+            return Client.KLINE_INTERVAL_1MINUTE
+        elif klines_length == "5":
+            return Client.KLINE_INTERVAL_5MINUTE
+        elif klines_length == "15":
+            return Client.KLINE_INTERVAL_15MINUTE
+        elif klines_length == "30":
+            return Client.KLINE_INTERVAL_30MINUTE
+        elif klines_length == "1H":
+            return Client.KLINE_INTERVAL_1HOUR
 
     def get_binance_klines(self, symbol):
-        return self.client.get_klines(symbol=symbol, interval=Client.KLINE_INTERVAL_15MINUTE)
+        return self.client.get_klines(symbol=symbol, interval=self.klines_length)
 
     def process_klines(self, klines):
         """
