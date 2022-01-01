@@ -17,8 +17,7 @@ backoffice = BackOffice()
 number_manager = NumberManager()
 settings = file_manager.read_json_file(file_name=f'botSetup.json')
 binance_trader = BinanceTrader(public_key=settings["binancePublic"], private_key=settings["binancePrivate"])
-client = Client(api_key=settings["binancePublic"], api_secret=settings["binancePrivate"])
-klines_manager = TaManager(client)
+klines_manager = TaManager(binance_trader.client)
 
 # Loading grid data
 SYMBOLS = settings["markets"]
@@ -38,7 +37,7 @@ def deploy_grid(symbol):
     """
     print(Fore.CYAN + f'Initializing GRID for {symbol} based on {GRID_BASE} as a base (L0)...')
     # Getting base and calcuating GRID
-    data = client.get_orderbook_ticker(symbol=symbol)
+    data = binance_trader.get_orderbook_data(symbol=symbol)
 
     # Get symbol details for processing
     symbol_data = backoffice.grid_manager.get_symbol_info(symbol=symbol)
@@ -55,13 +54,14 @@ def deploy_grid(symbol):
         print(Fore.GREEN + f'Last BID is {base_price} USDT')
 
     elif GRID_BASE == "ASK":
-        data = client.get_orderbook_ticker(symbol=symbol)
+        data = binance_trader.get_orderbook_data(symbol=symbol)
         base_price = data["askPrice"]
         print(Fore.GREEN + f'Last ASK is {base_price} USDT')
 
     print(Fore.BLUE + f'Creating {GRID_LEVELS} GRID levels with drop of {INTERVAL * (1 ** 2)}% per GRID...')
     buy_grid = grid_constructor.get_buy_grid(grid_count=GRID_LEVELS, asset_price=float(base_price), step=INTERVAL,
                                              price_filter_decimal=minimum_price_decimal)
+    print(buy_grid)
 
     level = 1
     dollar_size = int(DOLLAR_PER_TOKEN / GRID_LEVELS)  # Equal distribution of dollars across range
@@ -139,7 +139,7 @@ def check_grid_state(symbol):
                 purchase_qty = float(current_order["executedQty"])  # Executed quantity
 
                 # Get the trade details from order
-                trade_details = client.get_my_trades(symbol=symbol, orderId=current_order["orderId"])[0]
+                trade_details = binance_trader.get_my_trades(symbol=x["symbol"])
                 commission = trade_details["commission"]  # Commision charged
                 purchase_price = trade_details["price"]  # Purchase price of the executed limit order
 
@@ -154,7 +154,7 @@ def check_grid_state(symbol):
                 print(
                     Fore.YELLOW + f'Creating sell limit order of buy order {current_order["orderId"]} at {x["gridL"]}....')
 
-                #TODO rewrite this for OCO
+                # TODO rewrite this for OCO
                 sell_result = binance_trader.make_limit_sell(symbol=symbol,
                                                              quantity=f"{final_normal}",
                                                              price=price)
@@ -196,7 +196,6 @@ def check_grid_state(symbol):
             current_sell_limit_order = binance_trader.get_order(symbol=y["symbol"], order_id=y["orderId"])
             if current_sell_limit_order['status'] == 'FILLED':
                 print(Fore.GREEN + f"GRID: {y['gridL']} TRADE COMPLETED")
-
                 # TODO Integrate other data from the past to be stored for history
                 # Store the sell order in DB
                 if backoffice.grid_manager.store_to_done(current_sell_limit_order):
@@ -215,7 +214,19 @@ def check_grid_state(symbol):
         print(Fore.RED + f'{symbol} has no limit sells marked in DB')
 
     if len(limit_buy_orders) + len(limit_sell_orders) == 0:
-        print("Deploy new Grid ")
+        print(Fore.RED + f'NO Grid deployed for symbol {symbol}')
+        ohlcv = klines_manager.get_binance_klines(symbol=symbol)
+        ohlcv = klines_manager.process_klines(klines=ohlcv)
+        rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=14)
+
+        if rsi < settings["rsiManager"]:
+            print(Fore.LIGHTGREEN_EX + f'RSI less then limit {settings["rsiManager"]}...deploying new grid')
+            deploy_grid(symbol=symbol)
+        else:
+            print(
+                Fore.RED + f"Could not deploy GRID for symbol {symbol} as the 15 minutes RSI is greater than {settings['rsiManager']}")
+    else:
+        pass
 
     print(Fore.CYAN + f"Done checking symbol {symbol}\n" \
                       "==============================================")
@@ -227,8 +238,20 @@ def check_symbol_grids(symbols):
     print('Check symbols on run...')
     for s in symbols:
         if not backoffice.grid_manager.get_buy_limit_orders(s):
-            print(Fore.LIGHTGREEN_EX + f'No active GRID for {s} found....Initiating @  {datetime.utcnow()}')
-            deploy_grid(symbol=s)
+            if not backoffice.grid_manager.get_sell_limit_orders(s):
+                print(Fore.LIGHTGREEN_EX + f'No active GRID for {s} found....Initiating @  {datetime.utcnow()}')
+                print(Fore.LIGHTGREEN_EX + f'Checking RSI level of 15 minute candle')
+                # Check rsi values
+                ohlcv = klines_manager.get_binance_klines(symbol=s)
+                ohlcv = klines_manager.process_klines(klines=ohlcv)
+                rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=14)
+
+                if rsi < settings["rsiManager"]:
+                    print(Fore.LIGHTGREEN_EX + f'RSI < than limit {settings["rsiManager"]}...deploying')
+                    deploy_grid(symbol=s)
+                else:
+                    print(
+                        Fore.RED + f"Could not deploy GRID for symbol {s} as the 15 minutes RSI is greater than {settings['rsiManager']}")
         else:
             pass
     return
@@ -239,8 +262,7 @@ def check_symbols_db():
     for s in SYMBOLS:
         if not backoffice.grid_manager.check_symbol_data(symbol=s):
             # Get symbol data from exchange
-            symbol_data = client.get_symbol_info(symbol=s)
-            pprint(symbol_data)
+            symbol_data = binance_trader.get_symbol_data(symbol=s)
             if backoffice.grid_manager.store_symbol_data(data=symbol_data):
                 print(f'{s} data has been stored into database successfully')
             else:
@@ -256,7 +278,7 @@ def main():
         print(x)
     print("================")
 
-    check_symbols_db()
+    check_symbols_db()  # Check if symbol data for trading is store in DB to pull the data out
     check_symbol_grids(SYMBOLS)
     print(Fore.GREEN + f'All symbols have been checked and deployed')
     print(Fore.LIGHTGREEN_EX + f'Initiating grid monitor...')
@@ -277,7 +299,7 @@ if __name__ == '__main__':
 """
 TODO:
 - Store grid start to file and mark down grids
-- Integrate RSI to create new grids based on RSI 
-- Monitor GRID HITS of one level 
+- Integrate RSI to create new grids based on RSI
+- Monitor GRID HITS of one level
 - Determine when to create new grid "GAP" according to first GRID
 """
