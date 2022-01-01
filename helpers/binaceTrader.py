@@ -8,6 +8,15 @@ class BinanceTrader:
         self.private_key = private_key
         self.client = Client(api_key=self.public_key, api_secret=self.private_key)
 
+    def get_my_trades(self,symbol, order_id):
+        return self.client.get_my_trades(symbol=symbol, orderId=order_id)[0]
+
+    def get_orderbook_data(self, symbol):
+        return self.client.get_orderbook_ticker(symbol=symbol)
+
+    def get_symbol_data(self, symbol):
+        return self.client.get_symbol_info(symbol=symbol)
+
     def get_order(self, symbol, order_id):
         return self.client.get_order(symbol=symbol, orderId=order_id)
 
