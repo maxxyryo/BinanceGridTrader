@@ -258,17 +258,16 @@ def check_symbol_grids(symbols):
 
 
 def check_symbols_db():
-    print("Checking symbol details on start")
     for s in SYMBOLS:
         if not backoffice.grid_manager.check_symbol_data(symbol=s):
             # Get symbol data from exchange
             symbol_data = binance_trader.get_symbol_data(symbol=s)
             if backoffice.grid_manager.store_symbol_data(data=symbol_data):
-                print(f'{s} data has been stored into database successfully')
+                pass
             else:
-                print(f'Could not store {s} data from exchange')
+                pass
         else:
-            print(f'{s} details are already stored in database')
+            pass
     return
 
 
