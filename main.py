@@ -118,10 +118,10 @@ def check_grid_state(symbol):
     # Monitor grid status
 
     limit_buy_orders = backoffice.grid_manager.get_buy_limit_orders(ticker=symbol)
+    limit_sell_orders = backoffice.grid_manager.get_sell_limit_orders(ticker=symbol)
     print(Fore.MAGENTA + f'GRID: {symbol}')
-    print(Fore.WHITE + f'Total registered buy limit orders in DB {len(limit_buy_orders)}')
-    open = 1
 
+    open = 1
     # Symbol data for exchange
     symbol_data = backoffice.grid_manager.get_symbol_info(symbol=symbol)
     price_filter = [x for x in symbol_data["filters"] if x["filterType"] == 'PRICE_FILTER'][0]
@@ -139,7 +139,7 @@ def check_grid_state(symbol):
                 purchase_qty = float(current_order["executedQty"])  # Executed quantity
 
                 # Get the trade details from order
-                trade_details = binance_trader.get_my_trades(symbol=x["symbol"])
+                trade_details = binance_trader.get_my_trades(symbol=x["symbol"], order_id=x["orderId"])
                 commission = trade_details["commission"]  # Commision charged
                 purchase_price = trade_details["price"]  # Purchase price of the executed limit order
 
@@ -189,9 +189,7 @@ def check_grid_state(symbol):
 
     # Check limit sell order statuses
     open_sell = 1
-    limit_sell_orders = backoffice.grid_manager.get_sell_limit_orders(ticker=symbol)
     if limit_sell_orders:
-        print(Fore.WHITE + f'Total registered sell limit orders in DB {len(limit_sell_orders)}')
         for y in limit_sell_orders:
             current_sell_limit_order = binance_trader.get_order(symbol=y["symbol"], order_id=y["orderId"])
             if current_sell_limit_order['status'] == 'FILLED':
