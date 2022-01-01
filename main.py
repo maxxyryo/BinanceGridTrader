@@ -122,6 +122,7 @@ def check_grid_state(symbol):
     print(Fore.MAGENTA + f'GRID: {symbol}')
 
     open = 1
+    open_sell = 1
     # Symbol data for exchange
     symbol_data = backoffice.grid_manager.get_symbol_info(symbol=symbol)
     price_filter = [x for x in symbol_data["filters"] if x["filterType"] == 'PRICE_FILTER'][0]
@@ -129,6 +130,7 @@ def check_grid_state(symbol):
     minimum_price_decimal = number_manager.count_decimals(price_filter["minPrice"])
     minimum_lot_size_decimal = number_manager.count_decimals(lot_size["minQty"])
 
+    # Check limit buy orders
     if limit_buy_orders:
         for x in limit_buy_orders:
             current_order = binance_trader.get_order(symbol=x["symbol"], order_id=x["orderId"])
@@ -185,10 +187,9 @@ def check_grid_state(symbol):
                 print(Fore.LIGHTGREEN_EX + f'{x["gridL"]}: Order with ID {x["orderId"]} still open')
                 open += 1
     else:
-        print(Fore.RED + f'{symbol} has no limit buys marked in DB')
+        print(Fore.LIGHTRED_EX + f'{symbol} has no limit buys marked in DB')
 
     # Check limit sell order statuses
-    open_sell = 1
     if limit_sell_orders:
         for y in limit_sell_orders:
             current_sell_limit_order = binance_trader.get_order(symbol=y["symbol"], order_id=y["orderId"])
@@ -209,10 +210,12 @@ def check_grid_state(symbol):
                 print(Fore.LIGHTRED_EX + f'GL{open_sell}: Order with ID {y["orderId"]} still open')
                 open_sell += 1
     else:
-        print(Fore.RED + f'{symbol} has no limit sells marked in DB')
+        print(Fore.LIGHTRED_EX + f'{symbol} has no limit sells marked in DB')
 
+    # Check if grid can be deployed
     if len(limit_buy_orders) + len(limit_sell_orders) == 0:
         print(Fore.RED + f'NO Grid deployed for symbol {symbol}')
+        print(Fore.RED + f'Checking market manager')
         ohlcv = klines_manager.get_binance_klines(symbol=symbol)
         ohlcv = klines_manager.process_klines(klines=ohlcv)
         rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=14)
@@ -225,7 +228,6 @@ def check_grid_state(symbol):
                 Fore.RED + f"Could not deploy GRID for symbol {symbol} as the 15 minutes RSI is greater than {settings['rsiManager']}")
     else:
         pass
-
     print(Fore.CYAN + f"Done checking symbol {symbol}\n" \
                       "==============================================")
     return

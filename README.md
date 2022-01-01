@@ -4,6 +4,7 @@
 
 - [x] Create limit buy order grid for specific market under set conditions (Grid level distance, grid count,etc.) equally distributed.
   - [x] Grids are created on bot startup if no previous grids in database founds
+  - [X Grids are created based on market manager. If RSI of 15 minute candle is less that N than grid will be deployed
 - [x] Monitors grid orders and once purchase is done, it automatically sets the sell limits based on setup parameters
 - [x] Monitors limit sell orders 
 - [x] Activities stored in Mongo Database collections for tracking
@@ -12,6 +13,7 @@
   - [x] completed grids
   - [ ] performance calculation
 - [ ] Once Grids are completed make new grids once grid is completed
+  - [ ] Create new grids if there are free grid slots based on market manager
 - [ ] Overall account performance tracking
 
 ## Install  
