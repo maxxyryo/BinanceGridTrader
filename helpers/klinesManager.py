@@ -34,8 +34,9 @@ class TaManager:
 
     def get_rsi(self, df, rsi_length: int):
         """
-        Get the rsi values based on close
+        Get the last rsi on Close
         """
         df.ta.rsi(14, append=True)
         ta.rsi(df['Close'], length=rsi_length)
-        return df
+        value = df['RSI_14'].iloc[-1]
+        return value
