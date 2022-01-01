@@ -1,11 +1,8 @@
-from binance import Client
 from datetime import datetime
 from colorama import Fore, init
 import time
-from pprint import pprint
 from backend.backendManager import BackOffice
 from helpers.fileManagement import FileManager
-from helpers.numberManager import NumberManager
 from helpers.klinesManager import TaManager
 from helpers.gridConstructor import GridConstructor
 from helpers.binaceTrader import BinanceTrader
@@ -14,7 +11,6 @@ init(autoreset=True)
 file_manager = FileManager()
 grid_constructor = GridConstructor()
 backoffice = BackOffice()
-number_manager = NumberManager()
 settings = file_manager.read_json_file(file_name=f'botSetup.json')
 binance_trader = BinanceTrader(public_key=settings["binancePublic"], private_key=settings["binancePrivate"])
 klines_manager = TaManager(client=binance_trader.client, klines_length=settings["rsiTimeframe"])
@@ -197,7 +193,7 @@ def check_grid_state(symbol):
         print(Fore.RED + f'Checking market manager')
         ohlcv = klines_manager.get_binance_klines(symbol=symbol)
         ohlcv = klines_manager.process_klines(klines=ohlcv)
-        rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=14)
+        rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=settings["rsiLength"])
         if rsi < settings["rsiManager"]:
             print(Fore.LIGHTGREEN_EX + f'RSI less then limit {settings["rsiManager"]}...deploying new grid')
             deploy_grid(symbol=symbol)
@@ -225,7 +221,7 @@ def check_symbol_grids(symbols):
                 # Check rsi values
                 ohlcv = klines_manager.get_binance_klines(symbol=s)
                 ohlcv = klines_manager.process_klines(klines=ohlcv)
-                rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=14)
+                rsi = klines_manager.get_rsi(df=ohlcv, rsi_length=settings["rsiLength"])
                 if rsi < settings["rsiManager"]:
                     print(Fore.LIGHTGREEN_EX + f'RSI = {rsi} < than limit {settings["rsiManager"]}...deploying')
                     deploy_grid(symbol=s)
@@ -257,19 +253,26 @@ def main():
         print(x)
     print("================")
 
-    check_symbols_db()  # Check if symbol data for trading is store in DB to pull the data out
-    check_symbol_grids(SYMBOLS)
-    print(Fore.GREEN + f'All symbols have been checked and deployed')
-    print(Fore.LIGHTGREEN_EX + f'Initiating grid monitor...')
-    print(Fore.CYAN + '-----------------------\n'
-                      'Monitoring GRIDS...\n'
-                      '-----------------------')
-    while True:
-        print(Fore.CYAN + f'Checking grid status @ {datetime.utcnow()}')
-        for s in SYMBOLS:
-            check_grid_state(s)
-        print(f'All GRIDS checked going to sleep for 120 seconds')
-        time.sleep(settings["monitor"])
+    # Check fund requirements to run
+
+    if binance_trader.get_available_balance() > len(SYMBOLS) * DOLLAR_PER_TOKEN:
+        check_symbols_db()  # Check if symbol data for trading is store in DB to pull the data out
+        check_symbol_grids(SYMBOLS)
+        print(Fore.GREEN + f'All symbols have been checked and deployed')
+        print(Fore.LIGHTGREEN_EX + f'Initiating grid monitor...')
+        print(Fore.CYAN + '-----------------------\n'
+                          'Monitoring GRIDS...\n'
+                          '-----------------------')
+        while True:
+            print(Fore.CYAN + f'Checking grid status @ {datetime.utcnow()}')
+            for s in SYMBOLS:
+                check_grid_state(s)
+            print(f'All GRIDS checked going to sleep for 120 seconds')
+            time.sleep(settings["monitor"])
+    else:
+        print(
+            Fore.RED + f"ACC has insufficient balance. According to settings bot requires {len(SYMBOLS) * DOLLAR_PER_TOKEN}USDT,"
+                       f"to run {len(SYMBOLS)} symbols with {DOLLAR_PER_TOKEN} $/Symbol ")
 
 
 if __name__ == '__main__':
