@@ -21,6 +21,9 @@ class BinanceTrader:
         print(Fore.LIGHTCYAN_EX + f"{f}")
         return str(int(f)) if int(n) == 0 else f
 
+    def get_available_balance(self):
+        return float(self.client.get_asset_balance(asset="USDT")["free"])
+
     def get_buy_grid(self, grid_count, asset_price, step, step_size, value_per_mesh):
         """
         Calculates the grid
