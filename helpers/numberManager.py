@@ -9,4 +9,8 @@ class NumberManager():
         :return: integer to be used to determine minimal lot and decimal places
         """
         price = str(float(filter))
-        return price[::-1].find('.')
+        dec = price[::-1].find('.')
+        return dec
+
+#
+# print(NumberManager().count_decimals(0.0000001))
