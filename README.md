@@ -41,6 +41,8 @@ Create file into main directory under the name `botSetup.json` and fill in follo
   "dollarPerCoin": 240, // UDST devoted per pair
   "gain": 0.020 // Exit percentage for limit sell from marked buy price
   "monitor": 120 //Seconds between grid re-checks currently set to 120
+  "stopLimitSellPerc": 0.02  // Stop limit sell perc set at 2%,
+  "rsiManager": 47 // Rsi limit for GRID deployment. If less it will deploy it
 }
 
 ```
